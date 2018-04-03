@@ -1,0 +1,79 @@
+version: "3.1"
+services:
+
+    db:
+      image: mysql:5.7
+      secrets:
+        - source: mysql_root_password
+          target: mysql_root_password
+        - source: mysql_password
+          target: mysql_password
+        - source: mysql_user
+          target: mysql_user
+        - source: wp_user
+          target: wp_user
+        - source: wp_password
+          target: wp_password
+      environment:
+        MYSQL_ROOT_PASSWORD_FILE: '/run/secrets/mysql_root_password'
+        MYSQL_PASSWORD_FILE: '/run/secrets/mysql_password'
+        MYSQL_USER_FILE: '/run/secrets/mysql_user'
+        MYSQL_DATABASE: 'wordpressdb'
+      volumes:
+        - db-data:/var/lib/mysql
+      networks:
+        - backend
+      deploy:
+        replicas: 1
+        restart_policy:
+          condition: on-failure
+        placement:
+          constraints: [node.role == manager]
+        
+    wordpress:
+      image: wordpress:latest
+      secrets:
+        - source: mysql_password
+          target: wp_db_password
+          mode: 0440
+        - source: mysql_user
+          target: wp_db_user
+          mode: 0440
+
+      environment:
+        WORDPRESS_DB_PASSWORD_FILE: '/run/secrets/wp_db_password'
+        WORDPRESS_DB_USER_FILE: '/run/secrets/wp_db_user'
+        WORDPRESS_DB_NAME: 'wordpressdb'
+        WORDPRESS_DB_HOST: 'db:3306'
+      volumes:
+        - wp-data:/var/www/html
+      networks:
+        - backend
+      ports:
+        - 8080:80
+      deploy:
+        replicas: 2
+        update_config:
+          parallelism: 2
+          delay: 10s
+        restart_policy:
+          condition: on-failure
+
+secrets:
+  mysql_root_password:
+    external: true
+  mysql_password:
+    external: true
+  mysql_user:
+    external: true
+  wp_user:
+    external: true
+  wp_password:
+    external: true
+
+networks:
+  backend:
+
+volumes:
+  db-data:
+  wp-data:
