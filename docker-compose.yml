@@ -1,4 +1,4 @@
-version: "3.1"
+version: "3.2"
 services:
 
     db:
@@ -31,7 +31,10 @@ services:
           constraints: [node.role == manager]
         
     wordpress:
-      image: wordpress:latest
+      build:
+        context: .
+        dockerfile: Dockerfile.wp
+      image: shefeg/wp_custom:2.0
       secrets:
         - source: mysql_password
           target: wp_db_password
@@ -39,7 +42,6 @@ services:
         - source: mysql_user
           target: wp_db_user
           mode: 0440
-
       environment:
         WORDPRESS_DB_PASSWORD_FILE: '/run/secrets/wp_db_password'
         WORDPRESS_DB_USER_FILE: '/run/secrets/wp_db_user'
