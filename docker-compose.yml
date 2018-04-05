@@ -1,4 +1,4 @@
-version: "3.2"
+version: "3.5"
 services:
 
     db:
@@ -27,14 +27,17 @@ services:
         replicas: 1
         restart_policy:
           condition: on-failure
-        placement:
-          constraints: [node.role == manager]
         
     wordpress:
       build:
-        context: .
-        dockerfile: Dockerfile.wp
+        context: wordpress/.
+        dockerfile: Dockerfile
       image: shefeg/wp_custom:2.0
+      environment:
+        WORDPRESS_DB_PASSWORD_FILE: '/run/secrets/wp_db_password'
+        WORDPRESS_DB_USER_FILE: '/run/secrets/wp_db_user'
+        WORDPRESS_DB_NAME: 'wordpressdb'
+        WORDPRESS_DB_HOST: 'db:3306'
       secrets:
         - source: mysql_password
           target: wp_db_password
@@ -42,17 +45,13 @@ services:
         - source: mysql_user
           target: wp_db_user
           mode: 0440
-      environment:
-        WORDPRESS_DB_PASSWORD_FILE: '/run/secrets/wp_db_password'
-        WORDPRESS_DB_USER_FILE: '/run/secrets/wp_db_user'
-        WORDPRESS_DB_NAME: 'wordpressdb'
-        WORDPRESS_DB_HOST: 'db:3306'
       volumes:
         - wp-data:/var/www/html
       networks:
+        - frontend
         - backend
       ports:
-        - 8080:80
+        - "8080:80"
       deploy:
         replicas: 2
         update_config:
@@ -60,6 +59,37 @@ services:
           delay: 10s
         restart_policy:
           condition: on-failure
+    
+    nginx:
+      build:
+        context: nginx/.
+        dockerfile: Dockerfile
+      image: shefeg/nginx_custom:1.0
+      secrets:
+        - source: site.crt
+          target: site.crt
+          mode: 0440
+        - source: site.key
+          target: site.key
+          mode: 0440
+      volumes:
+        - nginx-logs:/var/log/nginx
+      networks:
+        - frontend
+      ports:
+        - "8000:80"
+        - "8443:443"
+      deploy:
+        replicas: 2
+        update_config:
+          parallelism: 2
+          delay: 10s
+        restart_policy:
+          condition: on-failure
+      configs:
+        - source: site.conf
+          target: /etc/nginx/conf.d/site.conf
+          mode: 0440
 
 secrets:
   mysql_root_password:
@@ -72,10 +102,20 @@ secrets:
     external: true
   wp_password:
     external: true
+  site.crt:
+    external: true
+  site.key:
+    external: true
+
+configs:
+  site.conf:
+    file: ./nginx/site.conf
 
 networks:
   backend:
+  frontend:
 
 volumes:
   db-data:
   wp-data:
+  nginx-logs:

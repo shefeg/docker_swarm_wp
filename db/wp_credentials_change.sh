@@ -1,7 +1,8 @@
 #!/bin/bash
 
-# To change Wordpress user login credentials - 
-# run manually in node terminal where db container is running
+# To change Wordpress user login credentials:
+# 1. Update docker secrets for wp_user, wp_password
+# 2. Run manually in node terminal where db container is running
 
 docker container exec $(docker ps --filter name=db -q) \
 bash -c 'mysql -u $(cat /run/secrets/mysql_user) -p$(cat /run/secrets/mysql_password) ${MYSQL_DATABASE} -e \
