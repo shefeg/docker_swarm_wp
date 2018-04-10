@@ -1,0 +1,49 @@
+{
+  "services": [
+    {
+      "id": "mysql",
+      "name": "mysql",
+      "tags": [
+        "backend"
+      ],
+      "address": "db",
+      "port": 3606,
+      "checks": [
+        {
+          "args": ["/consul/data/mysql_check.sh"],
+          "interval": "30s"
+        }
+      ]
+    },
+    {
+      "id": "wordpress",
+      "name": "wordpress",
+      "tags": [
+        "frontend"
+      ],
+      "address": "wordpress",
+      "port": 80,
+      "checks": [
+        {
+          "http": "http://wordpress:80",
+          "interval": "30s"
+        }
+      ]
+    },
+    {
+      "id": "nginx",
+      "name": "nginx",
+      "tags": [
+        "frontend"
+      ],
+      "address": "nginx",
+      "port": 80,
+      "checks": [
+        {
+          "http": "http://nginx:80",
+          "interval": "30s"
+        }
+      ]
+    }
+  ]
+}

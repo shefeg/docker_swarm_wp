@@ -1,96 +1,140 @@
 version: "3.5"
 services:
 
-    db:
-      image: mysql:5.7
-      secrets:
-        - source: mysql_root_password
-          target: mysql_root_password
-        - source: mysql_password
-          target: mysql_password
-        - source: mysql_user
-          target: mysql_user
-        - source: wp_user
-          target: wp_user
-        - source: wp_password
-          target: wp_password
-      environment:
-        MYSQL_ROOT_PASSWORD_FILE: '/run/secrets/mysql_root_password'
-        MYSQL_PASSWORD_FILE: '/run/secrets/mysql_password'
-        MYSQL_USER_FILE: '/run/secrets/mysql_user'
-        MYSQL_DATABASE: 'wordpressdb'
-      volumes:
-        - db-data:/var/lib/mysql
-      networks:
-        - backend
-      deploy:
-        replicas: 1
-        restart_policy:
-          condition: on-failure
+  db:
+    image: mysql:5.7
+    hostname: "mysql"
+    secrets:
+      - source: mysql_root_password
+        target: mysql_root_password
+      - source: mysql_password
+        target: mysql_password
+      - source: mysql_user
+        target: mysql_user
+      - source: wp_user
+        target: wp_user
+      - source: wp_password
+        target: wp_password
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: '/run/secrets/mysql_root_password'
+      MYSQL_PASSWORD_FILE: '/run/secrets/mysql_password'
+      MYSQL_USER_FILE: '/run/secrets/mysql_user'
+      MYSQL_DATABASE: 'wordpressdb'
+    volumes:
+      - db-data:/var/lib/mysql
+    networks:
+      - backend
+      - consul
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
         
-    wordpress:
-      build:
-        context: wordpress/.
-        dockerfile: Dockerfile
-      image: shefeg/wp_custom:2.0
-      environment:
-        WORDPRESS_DB_PASSWORD_FILE: '/run/secrets/wp_db_password'
-        WORDPRESS_DB_USER_FILE: '/run/secrets/wp_db_user'
-        WORDPRESS_DB_NAME: 'wordpressdb'
-        WORDPRESS_DB_HOST: 'db:3306'
-      secrets:
-        - source: mysql_password
-          target: wp_db_password
-          mode: 0440
-        - source: mysql_user
-          target: wp_db_user
-          mode: 0440
-      volumes:
-        - wp-data:/var/www/html
-      networks:
-        - frontend
-        - backend
-      ports:
-        - "8080:80"
-      deploy:
-        replicas: 2
-        update_config:
-          parallelism: 2
-          delay: 10s
-        restart_policy:
-          condition: on-failure
+  wordpress:
+    build:
+      context: wordpress/.
+      dockerfile: Dockerfile
+    image: shefeg/wp_custom:2.0
+    hostname: "wordpress"
+    environment:
+      WORDPRESS_DB_PASSWORD_FILE: '/run/secrets/wp_db_password'
+      WORDPRESS_DB_USER_FILE: '/run/secrets/wp_db_user'
+      WORDPRESS_DB_NAME: 'wordpressdb'
+      WORDPRESS_DB_HOST: 'db:3306'
+      SERVICE_NAME: 'wordpress'
+    secrets:
+      - source: mysql_password
+        target: wp_db_password
+        mode: 0440
+      - source: mysql_user
+        target: wp_db_user
+        mode: 0440
+    volumes:
+      - wp-data:/var/www/html
+    networks:
+      - frontend
+      - backend
+      - consul
+    ports:
+      - "8080:80"
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
     
-    nginx:
-      build:
-        context: nginx/.
-        dockerfile: Dockerfile
-      image: shefeg/nginx_custom:1.0
-      secrets:
-        - source: site.crt
-          target: site.crt
-          mode: 0440
-        - source: site.key
-          target: site.key
-          mode: 0440
-      volumes:
-        - nginx-logs:/var/log/nginx
-      networks:
-        - frontend
-      ports:
-        - "8000:80"
-        - "8443:443"
-      deploy:
-        replicas: 2
-        update_config:
-          parallelism: 2
-          delay: 10s
-        restart_policy:
-          condition: on-failure
-      configs:
-        - source: site.conf
-          target: /etc/nginx/conf.d/site.conf
-          mode: 0440
+  nginx:
+    build:
+      context: nginx/.
+      dockerfile: Dockerfile
+    image: shefeg/nginx_custom:1.0
+    hostname: "nginx"
+    secrets:
+      - source: site.crt
+        target: site.crt
+        mode: 0440
+      - source: site.key
+        target: site.key
+        mode: 0440
+    volumes:
+      - nginx-logs:/var/log/nginx
+    networks:
+      - frontend
+      - consul
+    ports:
+      - "8000:80"
+      - "8443:443"
+    deploy:
+      replicas: 2
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+    configs:
+      - source: site.conf
+        target: /etc/nginx/conf.d/site.conf
+        mode: 0440
 
+  consul-server-1: &consul-server
+    build:
+      context: consul/.
+      dockerfile: Dockerfile
+    image: shefeg/consul_custom:1.0
+    # image: consul:latest
+    hostname: "consul_server_1"
+    secrets:
+      - source: mysql_password
+        target: mysql_password
+      - source: mysql_user
+        target: mysql_user
+    environment:
+      CONSUL_BIND_INTERFACE: "eth0"
+      MYSQL_PASSWORD_FILE: '/run/secrets/mysql_password'
+      MYSQL_USER_FILE: '/run/secrets/mysql_user'
+    volumes:
+      - consul-config-dir:/etc/consul.d
+    networks:
+      - consul
+    command: "agent -server -enable-script-checks=true -retry-join consul-server-bootstrap -client 0.0.0.0"
+
+  consul-server-2:
+    <<: *consul-server
+    hostname: "consul_server_2"
+      
+  consul-server-bootstrap:
+    <<: *consul-server
+    hostname: "consul_server_bootstrap"
+    environment:
+      CONSUL_BIND_INTERFACE: "eth2"
+    ports:
+      - "8400:8400"
+      - "8500:8500"
+      - "8600:8600"
+    command: "agent -server -enable-script-checks=true -bootstrap-expect 3 -ui -client 0.0.0.0"
+   
 secrets:
   mysql_root_password:
     external: true
@@ -114,8 +158,10 @@ configs:
 networks:
   backend:
   frontend:
+  consul:
 
 volumes:
   db-data:
   wp-data:
   nginx-logs:
+  consul-config-dir:
