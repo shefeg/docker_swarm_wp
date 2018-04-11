@@ -58,7 +58,7 @@ services:
     ports:
       - "8080:80"
     deploy:
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 2
         delay: 10s
@@ -87,7 +87,7 @@ services:
       - "8000:80"
       - "8443:443"
     deploy:
-      replicas: 2
+      replicas: 1
       update_config:
         parallelism: 2
         delay: 10s
@@ -103,7 +103,6 @@ services:
       context: consul/.
       dockerfile: Dockerfile
     image: shefeg/consul_custom:1.0
-    # image: consul:latest
     hostname: "consul_server_1"
     secrets:
       - source: mysql_password
@@ -114,8 +113,13 @@ services:
       CONSUL_BIND_INTERFACE: "eth0"
       MYSQL_PASSWORD_FILE: '/run/secrets/mysql_password'
       MYSQL_USER_FILE: '/run/secrets/mysql_user'
-    volumes:
-      - consul-config-dir:/etc/consul.d
+    configs:
+      - source: services.json
+        target: /consul/config/services.json
+        mode: 0444
+      - source: mysql_check.sh
+        target: /consul/data/mysql_check.sh
+        mode: 0555
     networks:
       - consul
     command: "agent -server -enable-script-checks=true -retry-join consul-server-bootstrap -client 0.0.0.0"
@@ -136,6 +140,33 @@ services:
       - "8500:8500"
       - "8600:8600"
     command: "agent -server -enable-script-checks=true -bootstrap-expect 3 -ui -client 0.0.0.0"
+  
+  vault:
+    image: vault:latest
+    hostname: "vault"
+    cap_add:
+      - IPC_LOCK
+    environment:
+      VAULT_ADDR: http://vault:8200
+    ports:
+      - "8200:8200"
+    configs:
+      - source: vault.hcl
+        target: /vault/config/vault.hcl
+        mode: 0444
+      - source: wait-for-it.sh
+        target: /wait-for-it.sh
+        mode: 0555
+    volumes:
+      - vault-files:/vault/file
+      - vault-logs:/vault/logs
+    networks:
+      - consul
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+    command: "./wait-for-it.sh -t 20 -h consul-server-bootstrap -p 8500 -s -- vault server -config=/vault/config/vault.hcl"
    
 secrets:
   mysql_root_password:
@@ -156,6 +187,14 @@ secrets:
 configs:
   site.conf:
     file: ./nginx/site.conf
+  services.json:
+    file: ./consul/services.json
+  mysql_check.sh:
+    file: ./consul/mysql_check.sh
+  vault.hcl:
+    file: ./vault/vault.hcl
+  wait-for-it.sh:
+    file: ./vault/wait-for-it.sh
 
 networks:
   backend:
@@ -166,4 +205,5 @@ volumes:
   db-data:
   wp-data:
   nginx-logs:
-  consul-config-dir:
+  vault-files:
+  vault-logs:
