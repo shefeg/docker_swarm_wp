@@ -177,10 +177,30 @@ services:
       restart_policy:
         condition: on-failure
     command: "./wait-for-it.sh -t 20 -h consul-server-bootstrap -p 8500 -s -- vault server -config=/vault/config/vault.hcl"
+  
+  logspout:
+    image: gliderlabs/logspout:latest
+    hostname: "logspout"
+    volumes:
+      - /etc/hostname:/etc/host_hostname:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - consul
+    deploy:
+      mode: global
+      resources:
+        limits:
+          cpus: '0.20'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 128M
+    command:
+      syslog://10.130.75.119:514
 
   splunkenterprise:
-    hostname: "splunkenterprise"
     image: splunk/splunk:7.0.0
+    hostname: "splunkenterprise"
     environment:
       SPLUNK_START_ARGS: --accept-license --answer-yes
       SPLUNK_ENABLE_LISTEN: 9997
