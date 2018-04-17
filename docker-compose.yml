@@ -86,6 +86,10 @@ services:
     ports:
       - "8000:80"
       - "8443:443"
+    configs:
+      - source: site.conf
+        target: /etc/nginx/conf.d/site.conf
+        mode: 0440
     deploy:
       replicas: 1
       update_config:
@@ -93,10 +97,6 @@ services:
         delay: 10s
       restart_policy:
         condition: on-failure
-    configs:
-      - source: site.conf
-        target: /etc/nginx/conf.d/site.conf
-        mode: 0440
 
   consul-server-1: &consul-server
     build:
@@ -122,6 +122,13 @@ services:
         mode: 0555
     networks:
       - consul
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
     command: "agent -server -enable-script-checks=true -retry-join consul-server-bootstrap -client 0.0.0.0"
 
   consul-server-2:
@@ -164,9 +171,38 @@ services:
       - consul
     deploy:
       replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
       restart_policy:
         condition: on-failure
     command: "./wait-for-it.sh -t 20 -h consul-server-bootstrap -p 8500 -s -- vault server -config=/vault/config/vault.hcl"
+
+  splunkenterprise:
+    hostname: "splunkenterprise"
+    image: splunk/splunk:7.0.0
+    environment:
+      SPLUNK_START_ARGS: --accept-license --answer-yes
+      SPLUNK_ENABLE_LISTEN: 9997
+      SPLUNK_ADD_1: "monitor /var/log/remote-syslog"
+      SPLUNK_USER: root
+    volumes:
+      - opt-splunk-etc:/opt/splunk/etc
+      - opt-splunk-var:/opt/splunk/var
+      - /var/log/syslog:/var/log/remote-syslog
+    ports:
+      - "7800:8000"
+      - "9997:9997"
+      - "8088:8088"
+    networks:
+      - consul
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 2
+        delay: 10s
+      restart_policy:
+        condition: on-failure
    
 secrets:
   mysql_root_password:
@@ -207,3 +243,5 @@ volumes:
   nginx-logs:
   vault-files:
   vault-logs:
+  opt-splunk-etc:
+  opt-splunk-var:

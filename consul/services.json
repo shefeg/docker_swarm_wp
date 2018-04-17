@@ -44,6 +44,21 @@
           "interval": "30s"
         }
       ]
+    },
+    {
+      "id": "splunkenterprise",
+      "name": "splunkenterprise",
+      "tags": [
+        "backend"
+      ],
+      "address": "splunkenterprise",
+      "port": 8000,
+      "checks": [
+        {
+          "http": "http://splunkenterprise:8000",
+          "interval": "30s"
+        }
+      ]
     }
   ]
 }
