@@ -184,7 +184,7 @@ services:
     environment:
       SPLUNK_START_ARGS: --accept-license --answer-yes
       SPLUNK_ENABLE_LISTEN: 9997
-      SPLUNK_ADD_1: "monitor /var/log/remote-syslog"
+      SPLUNK_ADD: "monitor /var/log/remote-syslog"
       SPLUNK_USER: root
     volumes:
       - opt-splunk-etc:/opt/splunk/etc
